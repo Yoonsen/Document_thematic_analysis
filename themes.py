@@ -46,7 +46,7 @@ def create_nodes_and_edges_config(g, community_dict):
 
 @st.cache(suppress_st_warning=True, show_spinner = False)
 def theme_book(urn = None, reference = None, chunksize= 1000, maxval = 0.9, minval = 0.2):
-    chunk0 = dh.Chunks(urn= crp.corpus.urn[0], chunks = chunksize)
+    chunk0 = dh.Chunks(urn= urn, chunks = chunksize)
     df0 = pd.DataFrame(chunk0.chunks).transpose().fillna(0)
     count0 = df0.sum(axis = 1)
     if not reference is None: 
@@ -66,26 +66,54 @@ def get_corpus(freetext=None, title=None, from_year=1900, to_year=2020):
     c = dh.Corpus(freetext=freetext, title=title,from_year=from_year, to_year=to_year)
     return c.corpus
 
+@st.cache(suppress_st_warning=True, show_spinner = False)
+def totals(n=200000):
+    return api.totals(n=200000)
+
+
+image = Image.open("DHlab_logo_web_en_black.png")
+st.image(image)
+st.markdown("""Les mer på [DHLAB-siden](https://nb.no/dh-lab)""")
+
+
+
+st.title('Temaer i tekst')
+
+
 
 # select URN
+# Using the "with" syntax
 
+stikkord = st.text_input('Angi noen stikkord for å forme et utvalg tekster, og velg fra listen under')
 if stikkord == '':
     stikkord = None
-corpus = get_corpus(freetext=stikkord, from_year=period[0], to_year=period[1])
 
-#choices = [', '.join([str(z) for z in x]) for x in corpus[['authors','title', 'year','urn']].values.tolist()]
-choices = corpus[['authors','title', 'year','urn']]
-valg = st.selectbox("Velg et dokument", choices)
+corpus = get_corpus(freetext=stikkord) #, from_year=period[0], to_year=period[1])
+
+
+with st.form(key='my_form'):
+    refsize = st.number_input("Størrelse på referansekorpus", min_value = 20000, max_value = 500000, value = 200000)
+    ref = totals(refsize)
+    chunksize = st.number_input("Størrelse på chunk (300 og oppover)", min_value = 300, value = 1000)
+    choices = [', '.join([str(z) for z in x]) for x in corpus[['authors','title', 'year','urn']].values.tolist()]
+    valg = st.selectbox("Velg et dokument", choices)
+    urn = valg.split(', ')[-1]
+    submit_button = st.form_submit_button(label='Finn tema!')
 
 # create graph and themes
-prod = theme_book(urn = crp.corpus.urn[0], reference = None, maxval = 0.4, chunksize=300)
-G = nx.from_pandas_adjacency(prod)
-nodes, edges, config = create_nodes_and_edges_config(G, gnl.community_dict(G))
+
+    prod = theme_book(urn = urn, reference = ref, maxval = 0.4, chunksize= chunksize)
+    G = nx.from_pandas_adjacency(prod)
+    comm =  gnl.community_dict(G)
+
+#nodes, edges, config = create_nodes_and_edges_config(G, comm)
 
 # show graph
-st.markdown("## Graph")
-agraph(nodes, edges, config)
+#st.markdown("## Graph")
+#agraph(nodes, edges, config)
 
 # show themes
-st.markdown("## Themes")
-gnl.show_communities(G)
+#------------------------------------------ Clustre -------------------------------###
+
+    st.markdown("## Temaer")
+    st.write('\n\n'.join(['**{label}** {value}'.format(label = key, value = ', '.join(comm[key])) for key in comm]))
